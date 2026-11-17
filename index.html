@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:;">
+<title>SecureMsg // terminal</title>
+<style>
+  :root {
+    --green: #00ff41;
+    --dim: #00b82e;
+    --dark: #003b10;
+    --border: #00702a;
+    --bg: #000;
+    --panel: #050d05;
+    --input: #020a02;
+    --amber: #ffb000;
+    --red: #ff3b3b;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--green);
+    font-family: Consolas, "Courier New", monospace;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 99;
+    background: repeating-linear-gradient(to bottom, rgba(0,255,65,.03) 0 1px, transparent 1px 3px);
+  }
+  .layout { display: flex; min-height: 100vh; }
+
+  aside {
+    width: 230px; flex-shrink: 0;
+    background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 24px 0;
+  }
+  .brand { font-size: 22px; font-weight: bold; padding: 0 20px; text-shadow: 0 0 8px rgba(0,255,65,.6); }
+  .sub { font-size: 12px; color: var(--dim); padding: 2px 20px 26px; }
+  .nav {
+    background: transparent; border: 0; color: var(--dim); text-align: left;
+    font: bold 14px Consolas, "Courier New", monospace; padding: 11px 20px; cursor: pointer;
+  }
+  .nav:hover { color: var(--green); background: var(--dark); }
+  .nav.active { color: var(--green); background: var(--dark); }
+  .spacer { flex: 1; }
+  .badge { font-size: 12px; padding: 0 20px; font-weight: bold; }
+  .badge.ok { color: var(--green); }
+  .badge.warn { color: var(--amber); }
+
+  main { flex: 1; min-width: 0; padding: 24px 30px 20px; display: flex; flex-direction: column; }
+  .page { display: none; flex: 1; flex-direction: column; }
+  .page.active { display: flex; }
+  h1 { font-size: 34px; margin: 0; text-shadow: 0 0 10px rgba(0,255,65,.5); }
+  .cmd { color: var(--dim); margin: 4px 0 18px; }
+  .warnline { color: var(--amber); font-size: 13px; margin: 0 0 10px; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 16px 18px; margin-bottom: 14px;
+  }
+  .panel.grow { flex: 1; display: flex; flex-direction: column; }
+  .panel h2 { font-size: 15px; margin: 0 0 4px; }
+  .hint { color: var(--dim); font-size: 12.5px; margin: 0 0 10px; line-height: 1.5; }
+
+  .box {
+    width: 100%; background: var(--input); color: var(--green);
+    border: 1px solid var(--border); padding: 10px;
+    font: 13px Consolas, "Courier New", monospace;
+    resize: vertical; outline: none; min-height: 70px;
+    word-break: break-all;
+  }
+  .box:focus { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+  .box[readonly] { color: #7dff9e; }
+  .panel.grow .box.fill { flex: 1; min-height: 120px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .btn {
+    background: transparent; color: var(--green);
+    border: 1px solid var(--border); padding: 8px 14px;
+    font: bold 13px Consolas, "Courier New", monospace; cursor: pointer;
+  }
+  .btn:hover { background: var(--green); color: #000; }
+  .btn.primary { background: var(--dark); }
+  .btn.primary:hover { background: var(--green); color: #000; }
+
+  .status {
+    border-top: 1px solid var(--border); background: var(--panel);
+    color: var(--dim); font-size: 13px; padding: 8px 16px; min-height: 34px;
+  }
+  .status.ok { color: var(--green); }
+  .status.error { color: var(--red); }
+  .status.warn { color: var(--amber); }
+
+  dialog {
+    background: var(--panel); color: var(--green);
+    border: 1px solid var(--green); padding: 22px 26px; width: min(420px, 92vw);
+    font-family: Consolas, "Courier New", monospace;
+    box-shadow: 0 0 24px rgba(0,255,65,.25);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.8); }
+  dialog h2 { margin: 0 0 6px; font-size: 16px; }
+  dialog label { display: block; font-size: 13px; margin: 12px 0 4px; }
+  dialog input {
+    width: 100%; background: var(--input); color: var(--green);
+    border: 1px solid var(--border); padding: 8px; font: 14px Consolas, monospace; outline: none;
+  }
+  dialog input:focus { border-color: var(--green); }
+  .err { color: var(--red); font-size: 12.5px; min-height: 18px; margin: 8px 0 0; }
+
+  @media (max-width: 760px) {
+    .layout { flex-direction: column; }
+    aside { width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px; }
+    .brand { padding: 0 8px 0 8px; }
+    .sub { display: none; }
+    .nav { padding: 8px 10px; }
+    .spacer { display: none; }
+    .badge { padding: 0 8px; }
+    main { padding: 18px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand">SECUREMSG</div>
+    <div class="sub">encrypted channel v3-web</div>
+    <button class="nav active" data-page="keys">&gt; KEYS</button>
+    <button class="nav" data-page="encrypt">&gt; ENCRYPT</button>
+    <button class="nav" data-page="decrypt">&gt; DECRYPT</button>
+    <div class="spacer"></div>
+    <div id="badge" class="badge warn">[ NO KEY LOADED ]</div>
+  </aside>
+
+  <main>
+    <!-- KEYS -->
+    <section id="page-keys" class="page active">
+      <h1>KEYS_</h1>
+      <p class="cmd">$ manage your P-256 key-pair</p>
+
+      <div class="panel">
+        <h2>// public key</h2>
+        <p class="hint">Share this with anyone who wants to send you encrypted messages. It is safe to share.</p>
+        <textarea id="pubBox" class="box" rows="3" readonly placeholder="No key-pair yet. Click GENERATE NEW KEY-PAIR."></textarea>
+        <div class="row">
+          <button class="btn" id="copyPubBtn">COPY PUBLIC KEY</button>
+          <button class="btn" id="savePubBtn">SAVE .smpub</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>// key management</h2>
+        <p class="hint">Never share your private key. It is downloaded as a passphrase-locked .smkey file. Generating a new key replaces the current one.</p>
+        <div class="row">
+          <button class="btn primary" id="genBtn">GENERATE NEW KEY-PAIR</button>
+          <button class="btn" id="saveKeyBtn">DOWNLOAD PRIVATE KEY</button>
+          <button class="btn" id="loadKeyBtn">LOAD PRIVATE KEY</button>
+          <input type="file" id="keyFile" accept=".smkey" hidden>
+        </div>
+      </div>
+    </section>
+
+    <!-- ENCRYPT -->
+    <section id="page-encrypt" class="page">
+      <h1>ENCRYPT_</h1>
+      <p class="cmd">$ lock a message with the receiver's public key</p>
+
+      <div class="panel">
+        <h2>01 // receiver public key</h2>
+        <p class="hint">Paste the receiver's SMPUB- key, or load their .smpub file.</p>
+        <textarea id="recBox" class="box" rows="2" placeholder="SMPUB-..."></textarea>
+        <div class="row">
+          <button class="btn" id="loadRecBtn">LOAD .smpub FILE</button>
+          <button class="btn" id="clearRecBtn">CLEAR</button>
+          <input type="file" id="recFile" accept=".smpub,.txt" hidden>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>02 // message</h2>
+        <textarea id="msgBox" class="box" rows="4" placeholder="Type your secret message..."></textarea>
+        <div class="row">
+          <button class="btn primary" id="encBtn">ENCRYPT</button>
+          <button class="btn" id="clearEncBtn">CLEAR</button>
+        </div>
+      </div>
+
+      <div class="panel grow">
+        <h2>03 // encrypted token</h2>
+        <p class="hint">Send this token to the receiver. Only their private key can open it.</p>
+        <textarea id="tokenOut" class="box fill" readonly placeholder="Token appears here after encryption."></textarea>
+        <div class="row">
+          <button class="btn" id="copyTokenBtn">COPY TOKEN</button>
+          <button class="btn" id="saveTokenBtn">SAVE .txt</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- DECRYPT -->
+    <section id="page-decrypt" class="page">
+      <h1>DECRYPT_</h1>
+      <p class="cmd">$ open a message with your private key</p>
+      <p id="decWarn" class="warnline">! no private key loaded. go to KEYS to load one.</p>
+
+      <div class="panel">
+        <h2>01 // encrypted token</h2>
+        <p class="hint">Paste the token you received, or load it from a file.</p>
+        <textarea id="decToken" class="box" rows="4" placeholder="SMMSG1...."></textarea>
+        <div class="row">
+          <button class="btn" id="loadTokenBtn">LOAD FROM FILE</button>
+          <button class="btn primary" id="decBtn">DECRYPT</button>
+          <button class="btn" id="clearDecBtn">CLEAR</button>
+          <input type="file" id="tokenFile" accept=".txt" hidden>
+        </div>
+      </div>
+
+      <div class="panel grow">
+        <h2>02 // decrypted message</h2>
+        <textarea id="decOut" class="box fill" readonly placeholder="Decrypted message appears here."></textarea>
+        <div class="row">
+          <button class="btn" id="copyDecBtn">COPY MESSAGE</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="statusBar" class="status">&gt; system ready. generate a key-pair to begin.</div>
+
+<!-- Passphrase dialog -->
+<dialog id="pwDialog">
+  <form id="pwForm">
+    <h2 id="pwTitle">// passphrase</h2>
+    <p class="hint">This passphrase locks your private key. There is no recovery if you forget it.</p>
+    <label for="pw1">&gt; passphrase (min 8 chars)</label>
+    <input type="password" id="pw1" autocomplete="off">
+    <div id="pw2wrap">
+      <label for="pw2">&gt; confirm passphrase</label>
+      <input type="password" id="pw2" autocomplete="off">
+    </div>
+    <p id="pwErr" class="err"></p>
+    <div class="row">
+      <button type="button" class="btn" id="pwCancel">CANCEL</button>
+      <button type="submit" class="btn primary" id="pwOk">CONFIRM</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+
+  // ------------------------------------------------------------------
+  // Constants (must stay in sync with the protocol docs)
+  // ------------------------------------------------------------------
+  const PUB_PREFIX = "SMPUB-";
+  const TOKEN_PREFIX = "SMMSG1.";
+  const HKDF_INFO = "SecureMsg v1";
+  const KEYFILE_FORMAT = "SMKEY1";
+  const PBKDF2_ITER = 310000;
+  const ECDH = { name: "ECDH", namedCurve: "P-256" };
+
+  const TE = new TextEncoder();
+  const TD = new TextDecoder();
+
+  let myPriv = null;      // CryptoKey (private)
+  let myPubRaw = null;    // Uint8Array(65)
+  let myPubStr = "";
+
+  // ------------------------------------------------------------------
+  // Element refs
+  // ------------------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
+  const badge = $("badge"), statusBar = $("statusBar"), decWarn = $("decWarn");
+  const pubBox = $("pubBox"), recBox = $("recBox"), msgBox = $("msgBox");
+  const tokenOut = $("tokenOut"), decToken = $("decToken"), decOut = $("decOut");
+  const keyFile = $("keyFile"), recFile = $("recFile"), tokenFile = $("tokenFile");
+  const pwDialog = $("pwDialog"), pwForm = $("pwForm"), pwTitle = $("pwTitle");
+  const pw1 = $("pw1"), pw2 = $("pw2"), pw2wrap = $("pw2wrap"), pwErr = $("pwErr"), pwCancel = $("pwCancel");
+
+  // ------------------------------------------------------------------
+  // Helpers
+  // ------------------------------------------------------------------
+  function setStatus(msg, kind = "info") {
+    statusBar.textContent = "> " + msg;
+    statusBar.className = "status " + kind;
+  }
+
+  function b64e(bytes) {
+    const u = new Uint8Array(bytes);
+    let s = "";
+    for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function b64d(str) {
+    let s = str.replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    const bin = atob(s);
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  }
+
+  function concat(...arrs) {
+    const len = arrs.reduce((n, a) => n + a.length, 0);
+    const out = new Uint8Array(len);
+    let o = 0;
+    for (const a of arrs) { out.set(a, o); o += a.length; }
+    return out;
+  }
+
+  function download(name, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: name });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  async function copyText(el, label) {
+    const t = el.value.trim();
+    if (!t) return setStatus(label + " is empty", "warn");
+    try {
+      await navigator.clipboard.writeText(t);
+    } catch {
+      el.select();
+      document.execCommand("copy");
+    }
+    setStatus(label + " copied to clipboard", "ok");
+  }
+
+  // ------------------------------------------------------------------
+  // Passphrase dialog
+  // ------------------------------------------------------------------
+  function askPass(title, confirmMode) {
+    return new Promise((resolve) => {
+      pwTitle.textContent = "// " + title;
+      pw2wrap.hidden = !confirmMode;
+      pw1.value = "";
+      pw2.value = "";
+      pwErr.textContent = "";
+      let settled = false;
+
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        pwDialog.close();
+        resolve(value);
+      };
+
+      pwForm.onsubmit = (e) => {
+        e.preventDefault();
+        const p = pw1.value;
+        if (p.length < 8) { pwErr.textContent = "ERROR: passphrase must be at least 8 characters."; return; }
+        if (confirmMode && p !== pw2.value) { pwErr.textContent = "ERROR: passphrases do not match."; return; }
+        finish(p);
+      };
+      pwCancel.onclick = () => finish(null);
+      pwDialog.oncancel = () => finish(null);
+
+      pwDialog.showModal();
+      pw1.focus();
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Crypto: public key format
+  // ------------------------------------------------------------------
+  function parsePub(text) {
+    text = text.trim();
+    if (!text.startsWith(PUB_PREFIX)) throw new Error("Invalid public key. It must start with SMPUB-.");
+    let raw;
+    try { raw = b64d(text.slice(PUB_PREFIX.length)); }
+    catch { throw new Error("Public key is not valid base64."); }
+    if (raw.length !== 65 || raw[0] !== 4) throw new Error("Public key length or format is wrong.");
+    return raw;
+  }
+
+  // ------------------------------------------------------------------
+  // Crypto: encryption (ephemeral ECDH + HKDF-SHA256 + AES-256-GCM)
+  // ------------------------------------------------------------------
+  async function sharedSecret(priv, pub) {
+    return new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: pub }, priv, 256));
+  }
+
+  async function deriveAesKey(shared, ephRaw, recRaw) {
+    const base = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      {
+        name: "HKDF",
+        hash: "SHA-256",
+        salt: new Uint8Array(0),
+        info: concat(TE.encode(HKDF_INFO), ephRaw, recRaw),
+      },
+      base,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function encryptFor(recRaw, message) {
+    const recKey = await crypto.subtle.importKey("raw", recRaw, ECDH, false, []);
+    const eph = await crypto.subtle.generateKey(ECDH, true, ["deriveBits"]);
+    const ephRaw = new Uint8Array(await crypto.subtle.exportKey("raw", eph.publicKey));
+    const shared = await sharedSecret(eph.privateKey, recKey);
+    const aes = await deriveAesKey(shared, ephRaw, recRaw);
+    const nonce = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(
+      await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, aes, TE.encode(message))
+    );
+    return TOKEN_PREFIX + b64e(concat(ephRaw, nonce, ct));
+  }
+
+  async function decryptWith(token) {
+    if (!myPriv) throw new Error("No private key loaded. Go to KEYS first.");
+    token = token.trim();
+    if (!token.startsWith(TOKEN_PREFIX)) throw new Error("Invalid token format.");
+
+    let blob;
+    try { blob = b64d(token.slice(TOKEN_PREFIX.length)); }
+    catch { throw new Error("Token is corrupted."); }
+    if (blob.length < 65 + 12 + 16) throw new Error("Token is too short, it is corrupted.");
+
+    const ephRaw = blob.slice(0, 65);
+    const nonce = blob.slice(65, 77);
+    const ct = blob.slice(77);
+
+    try {
+      const ephKey = await crypto.subtle.importKey("raw", ephRaw, ECDH, false, []);
+      const shared = await sharedSecret(myPriv, ephKey);
+      const aes = await deriveAesKey(shared, ephRaw, myPubRaw);
+      const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, aes, ct);
+      return TD.decode(pt);
+    } catch {
+      throw new Error("Access denied: wrong key, or the token was tampered with.");
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Crypto: key pair + encrypted key file (.smkey)
+  // ------------------------------------------------------------------
+  async function deriveWrapKey(pass, salt) {
+    const base = await crypto.subtle.importKey("raw", TE.encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", hash: "SHA-256", salt, iterations: PBKDF2_ITER },
+      base,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function exportKeyFile(pass) {
+    const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", myPriv));
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const wrap = await deriveWrapKey(pass, salt);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrap, pkcs8));
+    return JSON.stringify({
+      format: KEYFILE_FORMAT,
+      salt: b64e(salt),
+      iv: b64e(iv),
+      data: b64e(ct),
+    }, null, 2);
+  }
+
+  async function importKeyFile(text, pass) {
+    const obj = JSON.parse(text);
+    if (obj.format !== KEYFILE_FORMAT) throw new Error("Not a SecureMsg key file.");
+    const wrap = await deriveWrapKey(pass, b64d(obj.salt));
+    const pkcs8 = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(obj.iv) }, wrap, b64d(obj.data));
+    const priv = await crypto.subtle.importKey("pkcs8", pkcs8, ECDH, true, ["deriveBits"]);
+    const jwk = await crypto.subtle.exportKey("jwk", priv);
+    const pub = await crypto.subtle.importKey(
+      "jwk", { kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y, ext: true }, ECDH, true, []
+    );
+    return { priv, pub };
+  }
+
+  async function setKeys(priv, pub) {
+    myPriv = priv;
+    myPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pub));
+    myPubStr = PUB_PREFIX + b64e(myPubRaw);
+    render();
+  }
+
+  function render() {
+    if (myPriv) {
+      badge.textContent = "[ KEY LOADED ]";
+      badge.className = "badge ok";
+      decWarn.hidden = true;
+      pubBox.value = myPubStr;
+    } else {
+      badge.textContent = "[ NO KEY LOADED ]";
+      badge.className = "badge warn";
+      decWarn.hidden = false;
+      pubBox.value = "";
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Navigation
+  // ------------------------------------------------------------------
+  function showPage(name) {
+    document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.id === "page-" + name));
+    document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("active", b.dataset.page === name));
+  }
+  document.querySelectorAll(".nav").forEach((b) => b.addEventListener("click", () => showPage(b.dataset.page)));
+
+  // ------------------------------------------------------------------
+  // KEYS actions
+  // ------------------------------------------------------------------
+  $("genBtn").addEventListener("click", async () => {
+    const pass = await askPass("generate key-pair", true);
+    if (!pass) return setStatus("key generation cancelled", "warn");
+    try {
+      const kp = await crypto.subtle.generateKey(ECDH, true, ["deriveBits"]);
+      await setKeys(kp.privateKey, kp.publicKey);
+      download("my-private-key.smkey", await exportKeyFile(pass));
+      setStatus("key-pair generated. keep the .smkey file safe.", "ok");
+    } catch (e) {
+      setStatus("key generation failed: " + e.message, "error");
+    }
+  });
+
+  $("saveKeyBtn").addEventListener("click", async () => {
+    if (!myPriv) return setStatus("generate or load a key first", "warn");
+    const pass = await askPass("protect private key", true);
+    if (!pass) return;
+    download("my-private-key.smkey", await exportKeyFile(pass));
+    setStatus("private key downloaded (passphrase protected).", "ok");
+  });
+
+  $("loadKeyBtn").addEventListener("click", () => keyFile.click());
+  keyFile.addEventListener("change", async () => {
+    const f = keyFile.files[0];
+    keyFile.value = "";
+    if (!f) return;
+    const pass = await askPass("unlock private key", false);
+    if (!pass) return;
+    try {
+      const { priv, pub } = await importKeyFile(await f.text(), pass);
+      await setKeys(priv, pub);
+      setStatus("private key unlocked.", "ok");
+    } catch {
+      setStatus("unlock failed: wrong passphrase or corrupted file", "error");
+    }
+  });
+
+  $("copyPubBtn").addEventListener("click", () => copyText(pubBox, "Public key"));
+  $("savePubBtn").addEventListener("click", () => {
+    if (!myPubStr) return setStatus("generate a key-pair first", "warn");
+    download("my-public-key.smpub", myPubStr);
+    setStatus("public key saved", "ok");
+  });
+
+  // ------------------------------------------------------------------
+  // ENCRYPT actions
+  // ------------------------------------------------------------------
+  $("loadRecBtn").addEventListener("click", () => recFile.click());
+  recFile.addEventListener("change", async () => {
+    const f = recFile.files[0];
+    recFile.value = "";
+    if (!f) return;
+    recBox.value = (await f.text()).trim();
+    setStatus("receiver public key loaded", "ok");
+  });
+  $("clearRecBtn").addEventListener("click", () => { recBox.value = ""; });
+
+  $("encBtn").addEventListener("click", async () => {
+    const rec = recBox.value.trim();
+    const msg = msgBox.value;
+    if (!rec) return setStatus("paste the receiver's public key first", "warn");
+    if (!msg.trim()) return setStatus("write a message first", "warn");
+    try {
+      const raw = parsePub(rec);
+      tokenOut.value = await encryptFor(raw, msg);
+      setStatus("message encrypted. send the token to the receiver.", "ok");
+    } catch (e) {
+      setStatus(e.message, "error");
+    }
+  });
+
+  $("clearEncBtn").addEventListener("click", () => {
+    msgBox.value = "";
+    tokenOut.value = "";
+    setStatus("message cleared", "info");
+  });
+
+  $("copyTokenBtn").addEventListener("click", () => copyText(tokenOut, "Token"));
+  $("saveTokenBtn").addEventListener("click", () => {
+    if (!tokenOut.value.trim()) return setStatus("encrypt a message first", "warn");
+    download("message-token.txt", tokenOut.value.trim());
+    setStatus("token saved", "ok");
+  });
+
+  // ------------------------------------------------------------------
+  // DECRYPT actions
+  // ------------------------------------------------------------------
+  $("loadTokenBtn").addEventListener("click", () => tokenFile.click());
+  tokenFile.addEventListener("change", async () => {
+    const f = tokenFile.files[0];
+    tokenFile.value = "";
+    if (!f) return;
+    decToken.value = (await f.text()).trim();
+    setStatus("token file loaded", "ok");
+  });
+
+  $("decBtn").addEventListener("click", async () => {
+    const token = decToken.value.trim();
+    if (!myPriv) return setStatus("load your private key in KEYS first", "warn");
+    if (!token) return setStatus("paste a token first", "warn");
+    try {
+      decOut.value = await decryptWith(token);
+      setStatus("message decrypted successfully", "ok");
+    } catch (e) {
+      decOut.value = "";
+      setStatus(e.message, "error");
+    }
+  });
+
+  $("clearDecBtn").addEventListener("click", () => {
+    decToken.value = "";
+    decOut.value = "";
+    setStatus("decrypt panel cleared", "info");
+  });
+
+  $("copyDecBtn").addEventListener("click", () => copyText(decOut, "Message"));
+
+  // ------------------------------------------------------------------
+  // Init
+  // ------------------------------------------------------------------
+  if (!window.crypto || !window.crypto.subtle) {
+    setStatus("Web Crypto is not available. Open this page over HTTPS or localhost.", "error");
+    document.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  }
+  render();
+})();
+</script>
+</body>
+</html>
